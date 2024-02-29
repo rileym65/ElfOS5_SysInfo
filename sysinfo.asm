@@ -300,6 +300,30 @@ mds_disp:     mov       rf,int32       ; now convert to ascii
 next3:        call      o_inmsg        ; display cr/lf
               db        10,13,0
 
+; ****************************
+; ***** Display CPU type *****
+; ****************************
+              call      o_inmsg        ; display label
+              db        'CPU         : ',0
+              mov       r7,01234h
+              mov       r8,r2          ; set R8 to a safe place
+              sex       r8             ; point x to R8
+              db        068h, 0b7h     ; RNX R7
+              sex       r2             ; point x back to stack
+              ghi       r8             ; see if test value is in destination
+              smi       012h
+              lbnz      is_1802
+              glo       r8
+              smi       034h
+              lbnz      is_1802
+              call      o_inmsg        ; processor is a 1804/5/6
+              db        '1804/5/6',0
+              lbr       cpu_done       ; done with cpu test
+is_1802:      call      o_inmsg        ; processor is an 1802
+              db        '1802',0
+cpu_done:     call      o_inmsg        ; display crlf
+              db        10,13,0
+
 ; ******************************
 ; ***** Display amount RAM *****
 ; ******************************
@@ -344,22 +368,8 @@ delay2:       dec       rc             ; decrement delay count
               ghi       rc
               or
               lbnz      delay2         ; loop until done
-              mov       rf,int32       ; point to int32
-              glo       ra             ; write highest address
-              str       rf
-              inc       rf
-              ghi       ra
-              str       rf
-              inc       rf
-              ldi       0
-              str       rf
-              inc       rf
-              str       rf
-              mov       rf,int32       ; now convert o ascii
-              mov       rd,buffer
-              call      itoa32
-              mov       rf,buffer      ; and display it
-              call      o_msg
+              mov       rf,ra          ; move for display
+              call      disp_size      ; and display it
 next4:        call      o_inmsg        ; display cr/lf
               db        10,13,0
 
@@ -370,22 +380,7 @@ next4:        call      o_inmsg        ; display cr/lf
               db        'f_freemem   : ',0
               call      f_freemem      ; get BIOS freemem
               inc       rf
-              mov       ra,int32       ; point to int32
-              glo       rf             ; and write freemem value
-              str       ra
-              inc       ra
-              ghi       rf
-              str       ra
-              inc       ra
-              ldi       0              ; high word is zero
-              str       ra
-              inc       ra
-              str       ra
-              mov       rf,int32       ; now convert o ascii
-              mov       rd,buffer
-              call      itoa32
-              mov       rf,buffer      ; and display it
-              call      o_msg
+              call      disp_size      ; display it
               call      o_inmsg        ; display cr/lf
               db        10,13,0
 
@@ -533,7 +528,52 @@ dev_4:        call      o_inmsg        ; display cr/lf
               ani       16
               lbz       rtc_no         ; jump if not
               call      o_inmsg        ; display yes
-              db        'Yes',0
+              db        'Yes (',0
+              push      r7             ; save R7
+              mov       rf,dta         ; where to write date information
+              call      f_gettod       ; get date/time from RTC
+              mov       rf,dta         ; point back to dta
+              lda       rf             ; get month
+              call      disp_2         ; display it
+              ldi       '/'            ; need a slash
+              call      o_type
+              mov       rf,dta+1       ; point back to dta
+              lda       rf             ; get day
+              call      disp_2         ; display it
+              ldi       '/'            ; need a slash
+              call      o_type
+              mov       rf,dta+2       ; point back to dta
+              lda       rf             ; get year
+              adi       0b4h           ; add 1972
+              plo       rd             ; put into rd for conversion
+              ldi       7              ; set high byte
+              adci      0
+              phi       rd
+              mov       rf,buffer      ; point to buffer
+              call      f_uintout      ; convert number
+              ldi       0              ; terminate
+              str       rf
+              mov       rf,buffer      ; and display it
+              call      o_msg
+              ldi       ' '            ; need a slash
+              call      o_type
+              mov       rf,dta+3       ; point back to dta
+              lda       rf             ; get hour
+              call      disp_2         ; display it
+              ldi       ':'            ; need a slash
+              call      o_type
+              mov       rf,dta+4       ; point back to dta
+              lda       rf             ; get minute
+              call      disp_2         ; display it
+              ldi       ':'            ; need a slash
+              call      o_type
+              mov       rf,dta+5       ; point back to dta
+              lda       rf             ; get second
+              call      disp_2         ; display it
+              ldi       ')'            ; need a slash
+              call      o_type
+
+              pop       r7             ; recover R7
               lbr       dev_5
 rtc_no:       call      o_inmsg        ; display no
               db        'No',0
@@ -545,7 +585,29 @@ dev_5:        call      o_inmsg        ; display cr/lf
               ani       32
               lbz       nvr_no         ; jump if not
               call      o_inmsg        ; display yes
-              db        'Yes',0
+              db        'Yes (',0
+              push      r7             ; save R7
+              call      f_rtctest      ; get amount of NVR
+              plo       re             ; save NVR size
+              mov       rf,int32       ; point to int32
+              glo       re             ; set it to NVR size
+              str       rf
+              inc       rf
+              ldi       0              ; next 3 bytes are zero
+              str       rf
+              inc       rf
+              str       rf
+              inc       rf
+              str       rf
+              inc       rf
+              mov       rf,int32       ; point to integer
+              mov       rd,buffer      ; where to put conversion
+              call      itoa32         ; convert number
+              mov       rf,buffer      ; display number
+              call      o_msg
+              call      o_inmsg
+              db        ' bytes)',0
+              pop       r7
               lbr       dev_6
 nvr_no:       call      o_inmsg        ; display no
               db        'No',0
@@ -575,12 +637,72 @@ f000_no:      call      o_inmsg        ; display no
               db        'No',0
 dev_8:        call      o_inmsg        ; display cr/lf
               db        10,13,0
-
+              call      o_inmsg
+              db        '  sd_rd/wr  : ',0
+              ghi       r7             ; check for f_sdread/f_sdwrite
+              ani       2
+              lbz       sdrdwr_no      ; jump if not
+              call      o_inmsg        ; display yes
+              db        'Yes',0
+              lbr       dev_9
+sdrdwr_no:    call      o_inmsg        ; display no
+              db        'No',0
+dev_9:        call      o_inmsg        ; display cr/lf
+              db        10,13,0
 
               ldi       0              ; set return value
               rtn                      ; return to caller
 
+disp_2:       plo       rd             ; put into rd for conversion
+              smi       10             ; check if single digit
+              lbdf      below_10       ; jump if two digits
+              ldi       '0'            ; otherwise display 0
+              call      o_type
+below_10:     ldi       0              ; clear high byte
+              phi       rd
+              mov       rf,buffer      ; point to buffer
+              call      f_uintout      ; convert number
+              ldi       0              ; terminate
+              str       rf
+              mov       rf,buffer      ; and display it
+              call      o_msg
+              rtn
 
+disp_size:    push      rf             ; save the value
+              mov       ra,int32       ; point to int32
+              glo       rf             ; and write size value
+              str       ra
+              inc       ra
+              ghi       rf
+              str       ra
+              inc       ra
+              ldi       0              ; high word is zero
+              str       ra
+              inc       ra
+              str       ra
+              mov       rf,int32       ; now convert o ascii
+              mov       rd,buffer
+              call      itoa32
+              mov       rf,buffer      ; and display it
+              call      o_msg
+              ldi       ' '            ; display a space
+              call      o_type
+              pop       rf             ; recover the value
+              ghi       rf             ; divide by 1024
+              shr
+              shr
+              plo       rd             ; put into rd
+              ldi       0              ; set high byte to zero
+              phi       rd
+              mov       rf,buffer      ; where to put conversion
+              call      f_uintout      ; convert to ascii
+              ldi       0              ; terminate
+              str       rf
+              mov       rf,buffer      ; now display it
+              call      o_msg
+              ldi       'K'
+              call      o_type
+              rtn
 
 dirent:    dw      0
 eof:       dw      0
