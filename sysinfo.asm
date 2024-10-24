@@ -12,7 +12,7 @@
 
               org     2000h
 
-              extrn   itoa32
+              extrn   int32_itoa
 
 begin:        br      start
               eever
@@ -30,7 +30,8 @@ start:        mov       rf,0400h       ; get Elf/OS version
 ; **********************************
 ; ***** Display kernel version *****
 ; **********************************
-start2:       call      o_inmsg        ; display label
+start2:       mov       r9,k_helpers
+              call      o_inmsg        ; display label
               db        'kernel      : ',0
               mov       rf,0400h       ; point to kernel version
               mov       ra,int32       ; point to integer storage
@@ -45,7 +46,7 @@ start2:       call      o_inmsg        ; display label
               str       ra
               mov       rf,int32       ; point to integer
               mov       rd,buffer      ; where to put conversion
-              call      itoa32         ; convert number
+              call      int32_itoa     ; convert number
               mov       rf,buffer      ; display number
               call      o_msg
               ldi       '.'            ; now display a dot
@@ -56,7 +57,7 @@ start2:       call      o_inmsg        ; display label
               str       ra
               mov       rf,int32       ; point to integer
               mov       rd,buffer      ; where to put conversion
-              call      itoa32         ; convert number
+              call      int32_itoa     ; convert number
               mov       rf,buffer      ; display number
               call      o_msg
               ldi       '.'            ; now display a dot
@@ -67,7 +68,7 @@ start2:       call      o_inmsg        ; display label
               str       ra
               mov       rf,int32       ; point to integer
               mov       rd,buffer      ; where to put conversion
-              call      itoa32         ; convert number
+              call      int32_itoa     ; convert number
               mov       rf,buffer      ; display number
               call      o_msg
               call      o_inmsg        ; display 'build'
@@ -82,7 +83,7 @@ start2:       call      o_inmsg        ; display label
               str       ra             ; int32 now has full build
               mov       rf,int32       ; point to integer
               mov       rd,buffer      ; where to put ascii
-              call      itoa32         ; convert number
+              call      int32_itoa     ; convert number
               mov       rf,buffer      ; now display it
               call      o_msg
               call      o_inmsg        ; display cr/lf
@@ -113,7 +114,7 @@ start2:       call      o_inmsg        ; display label
               db        'Boot        : Build ',0
               mov       rf,int32       ; convert build number to ascii
               mov       rd,buffer
-              call      itoa32
+              call      int32_itoa
               mov       rf,buffer      ; then display it
               call      o_msg
               call      o_inmsg
@@ -139,7 +140,7 @@ start2:       call      o_inmsg        ; display label
               str       ra
               mov       rf,int32       ; convert build number to ascii
               mov       rd,buffer
-              call      itoa32
+              call      int32_itoa
               mov       rf,buffer      ; then display it
               call      o_msg
               call      o_inmsg        ; display cr/lf
@@ -197,7 +198,7 @@ next:         call      o_inmsg        ; display cr/lf
               str       ra
               mov       rf,int32       ; point to int32
               mov       rd,buffer      ; where to put conversion
-              call      itoa32         ; convert to ascii
+              call      int32_itoa     ; convert to ascii
               mov       rf,buffer      ; and display result
               call      o_msg
               call      o_inmsg        ; display cr/lf
@@ -245,7 +246,7 @@ aus_II:       mov       ra,int32+3     ; point to msb of int32
               str       ra
 aus_disp:     mov       rf,int32       ; now convert to ascii
               mov       rd,buffer
-              call      itoa32
+              call      int32_itoa
               mov       rf,buffer      ; and display it
               call      o_msg
 next2:        call      o_inmsg        ; display cr/lf
@@ -294,7 +295,7 @@ mds_II:       mov       ra,int32+3     ; point to msb of int32
 
 mds_disp:     mov       rf,int32       ; now convert to ascii
               mov       rd,buffer
-              call      itoa32
+              call      int32_itoa
               mov       rf,buffer      ; and display it
               call      o_msg
 next3:        call      o_inmsg        ; display cr/lf
@@ -441,7 +442,7 @@ next4:        call      o_inmsg        ; display cr/lf
               str       ra
               mov       rf,int32       ; point to integer
               mov       rd,buffer      ; where to put conversion
-              call      itoa32         ; convert number
+              call      int32_itoa     ; convert number
               mov       rf,buffer      ; display number
               call      o_msg
               ldi       '.'            ; now display a dot
@@ -452,7 +453,7 @@ next4:        call      o_inmsg        ; display cr/lf
               str       ra
               mov       rf,int32       ; point to integer
               mov       rd,buffer      ; where to put conversion
-              call      itoa32         ; convert number
+              call      int32_itoa     ; convert number
               mov       rf,buffer      ; display number
               call      o_msg
               ldi       '.'            ; now display a dot
@@ -463,7 +464,7 @@ next4:        call      o_inmsg        ; display cr/lf
               str       ra
               mov       rf,int32       ; point to integer
               mov       rd,buffer      ; where to put conversion
-              call      itoa32         ; convert number
+              call      int32_itoa     ; convert number
               mov       rf,buffer      ; display number
               call      o_msg
               call      o_inmsg        ; display cr/lf
@@ -530,6 +531,7 @@ dev_4:        call      o_inmsg        ; display cr/lf
               call      o_inmsg        ; display yes
               db        'Yes (',0
               push      r7             ; save R7
+;              op2       k_save,r7_
               mov       rf,dta         ; where to write date information
               call      f_gettod       ; get date/time from RTC
               mov       rf,dta         ; point back to dta
@@ -574,6 +576,7 @@ dev_4:        call      o_inmsg        ; display cr/lf
               call      o_type
 
               pop       r7             ; recover R7
+;              op2       k_restore,r7_
               lbr       dev_5
 rtc_no:       call      o_inmsg        ; display no
               db        'No',0
@@ -586,7 +589,8 @@ dev_5:        call      o_inmsg        ; display cr/lf
               lbz       nvr_no         ; jump if not
               call      o_inmsg        ; display yes
               db        'Yes (',0
-              push      r7             ; save R7
+;              push      r7             ; save R7
+              op2       k_save,r7_
               call      f_rtctest      ; get amount of NVR
               plo       re             ; save NVR size
               mov       rf,int32       ; point to int32
@@ -602,12 +606,13 @@ dev_5:        call      o_inmsg        ; display cr/lf
               inc       rf
               mov       rf,int32       ; point to integer
               mov       rd,buffer      ; where to put conversion
-              call      itoa32         ; convert number
+              call      int32_itoa     ; convert number
               mov       rf,buffer      ; display number
               call      o_msg
               call      o_inmsg
               db        ' bytes)',0
-              pop       r7
+;              pop       r7
+              op2       k_restore,r7_
               lbr       dev_6
 nvr_no:       call      o_inmsg        ; display no
               db        'No',0
@@ -669,6 +674,7 @@ below_10:     ldi       0              ; clear high byte
               rtn
 
 disp_size:    push      rf             ; save the value
+;disp_size:    op2       k_save,rf_
               mov       ra,int32       ; point to int32
               glo       rf             ; and write size value
               str       ra
@@ -682,12 +688,13 @@ disp_size:    push      rf             ; save the value
               str       ra
               mov       rf,int32       ; now convert o ascii
               mov       rd,buffer
-              call      itoa32
+              call      int32_itoa
               mov       rf,buffer      ; and display it
               call      o_msg
               ldi       ' '            ; display a space
               call      o_type
               pop       rf             ; recover the value
+;              op2       k_restore,rf_
               ghi       rf             ; divide by 1024
               shr
               shr
